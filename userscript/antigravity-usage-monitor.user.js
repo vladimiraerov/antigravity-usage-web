@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Antigravity Usage Monitor (Web Portal)
 // @namespace    https://antigravity.google.com/
-// @version      1.5.2
+// @version      1.5.3
 // @description  Live 5h + Weekly model quota, prompt credits & reset countdown widget on antigravity.google.com
 // @match        https://antigravity.google.com/*
 // @match        https://*.antigravity.google.com/*
@@ -1270,17 +1270,15 @@
         }
       }
 
-      // 3. Raw Binary Protobuf
-      const validProtoFields = decodeProtoMessage(u8, 600);
-      if (validProtoFields) {
+      const rawProto = extractUsageFromProtoBytes(u8, meta.url, hints);
+      if (rawProto) {
+        if (isFromB64) b64Kinds.add('proto');
+        decodeKind = isFromB64 ? 'b64-proto' : 'proto';
+        matchedSnapshot = rawProto;
+        return;
+      } else if (decodeProtoMessage(u8, 600)) {
         if (isFromB64) b64Kinds.add('proto');
         else if (decodeKind === 'none') decodeKind = 'proto';
-        const rawProto = extractUsageFromProtoBytes(u8, meta.url, hints);
-        if (rawProto) {
-          decodeKind = isFromB64 ? 'b64-proto' : 'proto';
-          matchedSnapshot = rawProto;
-          return;
-        }
       } else if (isFromB64) {
         b64Kinds.add('opaque');
       }

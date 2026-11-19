@@ -73,7 +73,7 @@ The moment you switch to the **`https://antigravity.google.com`** web portal —
 2. Open **`chrome://extensions`** in Chrome (or any Chromium-based browser: Edge, Brave, Arc, Vivaldi).
 3. Toggle **Developer mode** **ON** in the top-right corner.
 4. Click **Load unpacked** and select the [`chrome-extension/`](chrome-extension/) folder.
-5. Open **`https://antigravity.google.com`** — the floating Usage Monitor pill appears automatically in the bottom-right corner.
+5. Open **`https://antigravity.google.com`** — the floating Usage Monitor pill appears automatically in the top-right bar (draggable anywhere).
 
 ### Option 2: Greasemonkey / Tampermonkey Userscript (Untested)
 
