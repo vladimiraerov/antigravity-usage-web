@@ -1454,7 +1454,7 @@
           'span',
           null,
           interceptorStatus.active
-            ? `Network hook: Active (v${interceptorStatus.version || '1.5.0'})${interceptorStatus.canRefresh ? ' · Refresh ready' : ''}`
+            ? `Network hook: Active (v${interceptorStatus.version || '1.5.2'})${interceptorStatus.canRefresh ? ' · Refresh ready' : ''}`
             : 'Network hook: Waiting for MAIN script… (reload page)'
         ),
         h('span', null, `${networkLog.length} unique`)
@@ -1552,7 +1552,7 @@
                 className: 'agy-btn secondary',
                 onClick: async () => {
                   const diag = {
-                    version: '1.5.1',
+                    version: '1.5.2',
                     host: window.location.host,
                     interceptorActive: interceptorStatus.active,
                     canRefresh: Boolean(interceptorStatus.canRefresh),

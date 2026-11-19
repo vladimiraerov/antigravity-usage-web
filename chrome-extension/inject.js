@@ -19,8 +19,20 @@
     uniqueEndpoints: new Map(),
     lastReplayableFetch: null,
     lastReplayableXhr: null,
+    lastReplayableModelCount: 0,
     startedAt: Date.now(),
   };
+
+  function isValidModelLabel(s) {
+    if (typeof s !== 'string') return false;
+    const t = s.trim();
+    if (t.length < 4 || t.length > 72) return false;
+    if (!MODEL_LABEL_RE.test(t)) return false;
+    // Never match file URIs, paths, URLs, or code filenames!
+    if (/:\/\/|[\\/]|\.(?:js|ts|jsx|tsx|py|md|json|html|css|svg|png|sh|txt|log)\b/i.test(t)) return false;
+    if (t.includes('\n') || t.includes('\r')) return false;
+    return true;
+  }
 
   const SKIP_EXT_RE = /\.(?:png|jpe?g|gif|webp|ico|svg|woff2?|ttf|otf|eot|css|map|mp4|webm|mp3|wav|wasm)(?:$|\?)/i;
   const SKIP_HOST_RE = /(?:fonts\.googleapis\.com|fonts\.gstatic\.com|www\.google-analytics\.com|googletagmanager\.com|doubleclick\.net|play\.google\.com\/log)/i;
@@ -652,15 +664,7 @@
           if (!planName && PLAN_NAME_RE.test(el) && el.length < 48) {
             planName = el.trim();
           }
-          if (
-            !labelCandidate &&
-            el.length >= 4 &&
-            el.length <= 72 &&
-            MODEL_LABEL_RE.test(el) &&
-            !el.startsWith('http') &&
-            !el.startsWith('/') &&
-            !el.includes('\n')
-          ) {
+          if (!labelCandidate && isValidModelLabel(el)) {
             labelCandidate = el.trim();
             hints.hasModelStrings = true;
           }
@@ -869,7 +873,7 @@
           const s = utf8Decoder.decode(f.bytes);
           if (ISO_TS_RE.test(s)) {
             const ms = Date.parse(s);
-            if (!Number.isNaN(ms)) {
+            if (!Number.isNaN(ms) && ms > Date.now() - 60000) {
               resetTime = ms;
               continue;
             }
@@ -882,7 +886,7 @@
         }
         const sub = decodeProtoMessage(f.bytes, 5);
         const ts = tryDecodeTimestampProto(sub);
-        if (ts) {
+        if (ts && ts > Date.now() - 60000) {
           resetTime = ts;
           continue;
         }
@@ -978,9 +982,7 @@
         }
       }
 
-      const labelCandidate = directStrings.find(
-        (s) => s.length >= 4 && s.length <= 72 && MODEL_LABEL_RE.test(s) && !s.startsWith('http') && !s.startsWith('/')
-      );
+      const labelCandidate = directStrings.find(isValidModelLabel);
 
       if (labelCandidate) {
         const outerHint = directStrings.join(' ');
@@ -1337,6 +1339,12 @@
     recordLogEntry(logEntry);
 
     if (matchedSnapshot) {
+      // Never let a 1-model false-positive overwrite a real multi-model GetUserStatus snapshot!
+      const prevCount = state.lastSnapshot?.models?.length || 0;
+      const nextCount = matchedSnapshot.models?.length || 0;
+      if (prevCount >= 3 && nextCount < 2 && !matchedSnapshot.promptCredits) {
+        return null;
+      }
       matchedSnapshot = mergeSnapshots(state.lastSnapshot, matchedSnapshot);
       state.lastSnapshot = matchedSnapshot;
       emitToTop(EVENT_DATA, matchedSnapshot);
@@ -1509,6 +1517,12 @@
 
       const saveReplayableIfMatched = (snap, xhrRef) => {
         if (!snap || !snap.models || snap.models.length === 0) return;
+        // Prefer the richest multi-model GetUserStatus ProxyCommand XHR (never overwrite a 20+ model RPC with a 1-item RPC!)
+        const count = snap.models.length;
+        if (state.lastReplayableXhr && count < Math.max(2, Math.floor(state.lastReplayableModelCount * 0.5))) {
+          return;
+        }
+        state.lastReplayableModelCount = count;
         state.lastReplayableXhr = {
           method: meta.method,
           url: meta.url,
@@ -1519,7 +1533,7 @@
         emitToTop(EVENT_STATUS, {
           active: true,
           startedAt: state.startedAt,
-          version: '1.5.0',
+          version: '1.5.2',
           canRefresh: true,
         });
       };
@@ -1747,7 +1761,7 @@
             detail: {
               active: true,
               startedAt: state.startedAt,
-              version: '1.5.0',
+              version: '1.5.2',
               canRefresh: Boolean(state.lastReplayableXhr || state.lastReplayableFetch),
             },
           })

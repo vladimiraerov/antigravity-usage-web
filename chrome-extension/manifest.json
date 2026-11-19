@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Antigravity Usage Monitor (Web Portal)",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "Adds a live model quota & usage monitor widget (inspired by tuckiestudio/antigravity-usage-monitor) directly to antigravity.google.com.",
   "permissions": [
     "storage"
