@@ -378,22 +378,16 @@
       box-sizing: border-box;
     }
     *, *::before, *::after { box-sizing: border-box; }
-    .agy-anchor {
-      position: fixed;
-      z-index: 2147483646;
-      right: 18px;
-      bottom: 18px;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 10px;
-      user-select: none;
-    }
     .agy-pill {
+      position: fixed;
+      z-index: 2147483647;
+      top: 12px;
+      right: 118px;
+      height: 34px;
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 7px 13px;
+      gap: 7px;
+      padding: 0 12px;
       border-radius: 999px;
       background: rgba(15, 23, 42, 0.92);
       backdrop-filter: blur(14px);
@@ -403,15 +397,33 @@
       color: #f8fafc;
       font-size: 12px;
       font-weight: 600;
+      font-variant-numeric: tabular-nums;
       letter-spacing: 0.01em;
       cursor: grab;
-      transition: transform 0.15s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+      user-select: none;
+      touch-action: none;
+      transition: border-color 0.18s ease, box-shadow 0.2s ease;
     }
     .agy-pill:hover {
-      border-color: rgba(148, 163, 184, 0.48);
+      border-color: rgba(56, 189, 248, 0.65);
       box-shadow: 0 10px 28px rgba(0, 0, 0, 0.56);
     }
     .agy-pill:active { cursor: grabbing; }
+    .agy-pill-refresh {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      padding: 2px 3px;
+      border-radius: 50%;
+      font-size: 12px;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .agy-pill-refresh:hover { color: #38bdf8; }
+    .agy-pill-refresh.spinning { color: #38bdf8; animation: agySpin 0.8s linear infinite; }
     .agy-dot {
       width: 8px;
       height: 8px;
@@ -440,9 +452,11 @@
     .agy-pill-tag.wait { background: rgba(100, 116, 139, 0.22); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.25); }
 
     .agy-panel {
-      width: 400px;
+      position: fixed;
+      z-index: 2147483646;
+      width: 356px;
       max-width: calc(100vw - 24px);
-      max-height: min(640px, calc(100vh - 90px));
+      max-height: min(560px, calc(100vh - 80px));
       display: flex;
       flex-direction: column;
       border-radius: 16px;
@@ -460,7 +474,11 @@
       padding: 12px 14px;
       border-bottom: 1px solid rgba(148, 163, 184, 0.12);
       background: rgba(15, 23, 42, 0.72);
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
     }
+    .agy-header:active { cursor: grabbing; }
     .agy-title-wrap { display: flex; align-items: center; gap: 8px; min-width: 0; }
     .agy-title { font-size: 13px; font-weight: 700; color: #f8fafc; white-space: nowrap; }
     .agy-actions { display: flex; align-items: center; gap: 4px; }
@@ -732,9 +750,35 @@
 
   let hostEl = null;
   let shadowRoot = null;
-  let anchorEl = null;
   let pillEl = null;
   let panelEl = null;
+  let isDragging = false;
+  let isHovered = false;
+  let hoverCloseTimer = null;
+
+  function isPanelVisible() {
+    return isOpen || isHovered;
+  }
+
+  function setupHoverPeek(el) {
+    el.addEventListener('pointerenter', () => {
+      if (hoverCloseTimer) {
+        clearTimeout(hoverCloseTimer);
+        hoverCloseTimer = null;
+      }
+      if (!isHovered && !isDragging) {
+        isHovered = true;
+        renderPanel();
+      }
+    });
+    el.addEventListener('pointerleave', () => {
+      if (isOpen || isDragging) return;
+      hoverCloseTimer = setTimeout(() => {
+        isHovered = false;
+        renderPanel();
+      }, 220);
+    });
+  }
 
   function ensureMounted() {
     if (hostEl && document.documentElement.contains(hostEl)) return;
@@ -746,94 +790,132 @@
     styleEl.textContent = STYLES;
     shadowRoot.appendChild(styleEl);
 
-    anchorEl = h('div', { className: 'agy-anchor' });
     panelEl = h('div', { className: 'agy-panel', style: { display: 'none' } });
     pillEl = h('div', {
       className: 'agy-pill',
-      title: 'Antigravity Usage Monitor — Click to expand, drag to move',
+      title: 'Antigravity Usage Monitor — Hover to peek, click to pin, drag to move',
     });
 
-    anchorEl.appendChild(panelEl);
-    anchorEl.appendChild(pillEl);
-    shadowRoot.appendChild(anchorEl);
+    shadowRoot.appendChild(panelEl);
+    shadowRoot.appendChild(pillEl);
 
-    setupDragAndClick();
+    setupDragOnElement(pillEl, true);
+    setupHoverPeek(pillEl);
+    setupHoverPeek(panelEl);
     applySavedPosition();
 
     (document.documentElement || document.body).appendChild(hostEl);
     render();
   }
 
-  function applySavedPosition() {
-    if (!anchorEl) return;
-    if (settings.position && typeof settings.position.left === 'number' && typeof settings.position.top === 'number') {
-      const clampedLeft = Math.max(8, Math.min(window.innerWidth - 140, settings.position.left));
-      const clampedTop = Math.max(8, Math.min(window.innerHeight - 44, settings.position.top));
-      anchorEl.style.left = `${clampedLeft}px`;
-      anchorEl.style.top = `${clampedTop}px`;
-      anchorEl.style.right = 'auto';
-      anchorEl.style.bottom = 'auto';
-      anchorEl.style.alignItems = clampedLeft < window.innerWidth / 2 ? 'flex-start' : 'flex-end';
+  function positionPanel() {
+    if (!panelEl || !pillEl || !isPanelVisible()) return;
+    const pillRect = pillEl.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const margin = 8;
+    const panelW = Math.min(356, vw - 24);
+
+    // Horizontally align panel with pill without ever overflowing viewport
+    let left = pillRect.right - panelW;
+    if (left < 12) left = pillRect.left;
+    left = Math.max(12, Math.min(vw - panelW - 12, left));
+
+    // Open BELOW pill when more room below (like Gemini HUD top-right); open ABOVE when near bottom
+    const spaceAbove = pillRect.top - margin - 12;
+    const spaceBelow = vh - pillRect.bottom - margin - 12;
+
+    panelEl.style.left = `${Math.round(left)}px`;
+    panelEl.style.right = 'auto';
+
+    if (spaceBelow >= spaceAbove) {
+      const maxH = Math.max(180, Math.min(560, Math.floor(spaceBelow)));
+      panelEl.style.maxHeight = `${maxH}px`;
+      panelEl.style.bottom = 'auto';
+      panelEl.style.top = `${Math.round(pillRect.bottom + margin)}px`;
     } else {
-      anchorEl.style.left = 'auto';
-      anchorEl.style.top = 'auto';
-      anchorEl.style.right = '18px';
-      anchorEl.style.bottom = '18px';
-      anchorEl.style.alignItems = 'flex-end';
+      const maxH = Math.max(180, Math.min(560, Math.floor(spaceAbove)));
+      panelEl.style.maxHeight = `${maxH}px`;
+      panelEl.style.top = 'auto';
+      panelEl.style.bottom = `${Math.round(vh - pillRect.top + margin)}px`;
     }
   }
 
-  function setupDragAndClick() {
-    let dragging = false;
+  function applySavedPosition() {
+    if (!pillEl) return;
+    if (settings.position && typeof settings.position.left === 'number' && typeof settings.position.top === 'number') {
+      const pillW = pillEl.offsetWidth || 180;
+      const pillH = pillEl.offsetHeight || 34;
+      const clampedLeft = Math.max(8, Math.min(window.innerWidth - pillW - 8, settings.position.left));
+      const clampedTop = Math.max(8, Math.min(window.innerHeight - pillH - 8, settings.position.top));
+      pillEl.style.left = `${Math.round(clampedLeft)}px`;
+      pillEl.style.top = `${Math.round(clampedTop)}px`;
+      pillEl.style.right = 'auto';
+      pillEl.style.bottom = 'auto';
+    } else {
+      pillEl.style.left = 'auto';
+      pillEl.style.bottom = 'auto';
+      pillEl.style.top = '12px';
+      pillEl.style.right = '118px';
+    }
+    positionPanel();
+  }
+
+  function setupDragOnElement(handleEl, toggleOnClick) {
     let moved = false;
     let startX = 0;
     let startY = 0;
     let origLeft = 0;
     let origTop = 0;
 
-    pillEl.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0) return;
-      dragging = true;
-      moved = false;
-      const rect = anchorEl.getBoundingClientRect();
-      startX = e.clientX;
-      startY = e.clientY;
-      origLeft = rect.left;
-      origTop = rect.top;
-      pillEl.setPointerCapture(e.pointerId);
-    });
-
-    pillEl.addEventListener('pointermove', (e) => {
-      if (!dragging) return;
+    const onMove = (e) => {
+      if (!isDragging) return;
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
       if (!moved && Math.hypot(dx, dy) < 5) return;
       moved = true;
-      const newLeft = Math.max(8, Math.min(window.innerWidth - anchorEl.offsetWidth - 8, origLeft + dx));
-      const newTop = Math.max(8, Math.min(window.innerHeight - anchorEl.offsetHeight - 8, origTop + dy));
-      anchorEl.style.left = `${newLeft}px`;
-      anchorEl.style.top = `${newTop}px`;
-      anchorEl.style.right = 'auto';
-      anchorEl.style.bottom = 'auto';
-      anchorEl.style.alignItems = newLeft < window.innerWidth / 2 ? 'flex-start' : 'flex-end';
-    });
+      const pillW = pillEl.offsetWidth || 160;
+      const pillH = pillEl.offsetHeight || 34;
+      const newLeft = Math.max(8, Math.min(window.innerWidth - pillW - 8, origLeft + dx));
+      const newTop = Math.max(8, Math.min(window.innerHeight - pillH - 8, origTop + dy));
+      pillEl.style.left = `${Math.round(newLeft)}px`;
+      pillEl.style.top = `${Math.round(newTop)}px`;
+      pillEl.style.right = 'auto';
+      pillEl.style.bottom = 'auto';
+      positionPanel();
+    };
 
-    pillEl.addEventListener('pointerup', (e) => {
-      if (!dragging) return;
-      dragging = false;
-      try {
-        pillEl.releasePointerCapture(e.pointerId);
-      } catch {
-        // ignore
-      }
+    const onUp = () => {
+      if (!isDragging) return;
+      isDragging = false;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
       if (moved) {
-        const rect = anchorEl.getBoundingClientRect();
+        const rect = pillEl.getBoundingClientRect();
         settings.position = { left: Math.round(rect.left), top: Math.round(rect.top) };
         saveStorage(STORAGE_SETTINGS_KEY, settings);
-      } else {
+        positionPanel();
+      } else if (toggleOnClick) {
         isOpen = !isOpen;
         render();
       }
+    };
+
+    handleEl.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      if (e.target && e.target.closest && e.target.closest('button')) return;
+      e.preventDefault();
+      isDragging = true;
+      moved = false;
+      const rect = pillEl.getBoundingClientRect();
+      startX = e.clientX;
+      startY = e.clientY;
+      origLeft = rect.left;
+      origTop = rect.top;
+      window.addEventListener('pointermove', onMove, { passive: true });
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onUp);
     });
   }
 
@@ -866,7 +948,7 @@
   }
 
   function renderPill() {
-    if (!pillEl) return;
+    if (!pillEl || isDragging) return;
     const snap = getActiveSnapshot();
     const health = getOverallHealth(snap);
 
@@ -916,12 +998,26 @@
       }
     }
 
+    const refreshBtn = h(
+      'button',
+      {
+        className: `agy-pill-refresh ${isRefreshing ? 'spinning' : ''}`,
+        title: 'Refresh quota now',
+        onClick: (e) => {
+          e.stopPropagation();
+          triggerManualRefresh();
+        },
+      },
+      '↻'
+    );
+
     const children = [
       h('span', { className: `agy-dot ${health}` }),
       h('span', null, mainText),
     ];
     if (resetText) children.push(h('span', { className: 'agy-pill-reset' }, resetText));
     children.push(h('span', { className: `agy-pill-tag ${tagClass}` }, tagLabel));
+    children.push(refreshBtn);
 
     pillEl.replaceChildren(...children);
   }
@@ -1456,7 +1552,7 @@
                 className: 'agy-btn secondary',
                 onClick: async () => {
                   const diag = {
-                    version: '1.5.0',
+                    version: '1.5.1',
                     host: window.location.host,
                     interceptorActive: interceptorStatus.active,
                     canRefresh: Boolean(interceptorStatus.canRefresh),
@@ -1494,17 +1590,20 @@
 
   function renderPanel() {
     if (!panelEl) return;
-    if (!isOpen) {
+    if (!isPanelVisible()) {
       panelEl.style.display = 'none';
       return;
     }
+    const prevBody = panelEl.querySelector('.agy-body');
+    const prevScrollTop = prevBody ? prevBody.scrollTop : 0;
+
     panelEl.style.display = 'flex';
     const snap = getActiveSnapshot();
     const health = getOverallHealth(snap);
 
     const header = h(
       'div',
-      { className: 'agy-header' },
+      { className: 'agy-header', title: 'Drag to move widget' },
       h(
         'div',
         { className: 'agy-title-wrap' },
@@ -1530,6 +1629,7 @@
             title: 'Minimize',
             onClick: () => {
               isOpen = false;
+              isHovered = false;
               renderPanel();
             },
           },
@@ -1572,6 +1672,9 @@
     const body = h('div', { className: 'agy-body' }, ...bodyChildren);
 
     panelEl.replaceChildren(header, tabs, body);
+    setupDragOnElement(header, false);
+    if (prevScrollTop > 0) body.scrollTop = prevScrollTop;
+    positionPanel();
   }
 
   function render() {
@@ -1581,7 +1684,7 @@
 
   setInterval(() => {
     renderPill();
-    if (isOpen && activeTab === 'overview' && panelEl) {
+    if (isPanelVisible() && activeTab === 'overview' && panelEl) {
       panelEl.querySelectorAll('[data-reset-ts]').forEach((el) => {
         const ts = Number(el.getAttribute('data-reset-ts'));
         if (ts > 0) {
@@ -1612,7 +1715,7 @@
     }
     refreshNoticeTimer = setTimeout(() => {
       refreshNotice = '';
-      if (isOpen && activeTab === 'overview') renderPanel();
+      if (isPanelVisible() && activeTab === 'overview') renderPanel();
     }, 3500);
     render();
   });
@@ -1624,7 +1727,7 @@
       if (!prevCanRefresh && interceptorStatus.canRefresh) {
         restartPolling();
       }
-      if (isOpen && activeTab === 'inspector') renderPanel();
+      if (isPanelVisible() && activeTab === 'inspector') renderPanel();
     }
   });
 
@@ -1648,7 +1751,7 @@
     }
     networkLog.unshift(entry);
     if (networkLog.length > 50) networkLog.length = 50;
-    if (isOpen && activeTab === 'inspector') {
+    if (isPanelVisible() && activeTab === 'inspector') {
       renderPanel();
     }
   });
