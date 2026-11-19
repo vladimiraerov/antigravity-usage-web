@@ -1,0 +1,59 @@
+{
+  "manifest_version": 3,
+  "name": "Antigravity Usage Monitor (Web Portal)",
+  "version": "1.5.0",
+  "description": "Adds a live model quota & usage monitor widget (inspired by tuckiestudio/antigravity-usage-monitor) directly to antigravity.google.com.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://antigravity.google.com/*",
+    "https://*.antigravity.google.com/*",
+    "https://antigravity.google/*",
+    "https://*.antigravity.google/*"
+  ],
+  "optional_host_permissions": [
+    "http://127.0.0.1/*",
+    "http://localhost/*"
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "Antigravity Usage Monitor",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://antigravity.google.com/*",
+        "https://*.antigravity.google.com/*",
+        "https://antigravity.google/*",
+        "https://*.antigravity.google/*"
+      ],
+      "js": ["inject.js"],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://antigravity.google.com/*",
+        "https://*.antigravity.google.com/*",
+        "https://antigravity.google/*",
+        "https://*.antigravity.google/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": false,
+      "world": "ISOLATED"
+    }
+  ]
+}
